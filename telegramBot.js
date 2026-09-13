@@ -222,8 +222,20 @@ Bot hoạt động tự động 24/7, liên tục quét các phòng live TikTok 
 
   async launch() {
     console.log('[TelegramBot] 🤖 Đang khởi chạy Telegram Bot...');
-    await this.bot.launch();
-    console.log('[TelegramBot] ✅ Bot đã kết nối Telegram thành công và đang lắng nghe lệnh!');
+    try {
+      await this.bot.launch({ dropPendingUpdates: true });
+      console.log('[TelegramBot] ✅ Bot đã kết nối Telegram thành công và đang lắng nghe lệnh!');
+    } catch (err) {
+      console.error('[TelegramBot] Lỗi kết nối Telegraf:', err.message);
+      if (err.message.includes('409') || err.message.includes('conflict')) {
+        console.log('[TelegramBot] Phát hiện phiên bot cũ đang chạy, đang đợi 8s để phiên cũ ngắt...');
+        await new Promise(r => setTimeout(r, 8000));
+        await this.bot.launch({ dropPendingUpdates: true });
+        console.log('[TelegramBot] ✅ Bot đã kết nối lại Telegram thành công!');
+      } else {
+        throw err;
+      }
+    }
   }
 
   stop() {

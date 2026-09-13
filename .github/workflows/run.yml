@@ -12,6 +12,11 @@ permissions:
   contents: write
   actions: write
 
+# Đảm bảo chỉ có DUY NHẤT 1 phiên bản bot chạy cùng lúc
+concurrency:
+  group: tiktok-live-bot-singleton
+  cancel-in-progress: true
+
 jobs:
   run-bot:
     name: Run Chest Hunter Bot
@@ -42,7 +47,7 @@ jobs:
           echo "Chu kỳ chạy hiện tại đã kết thúc thành công."
 
       - name: Auto-Retrigger Next 5-Hour Cycle
-        if: always()
+        if: success()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
