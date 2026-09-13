@@ -122,18 +122,12 @@ class TikTokTracker {
 
       // Lắng nghe sự kiện rương (Treasure Box / Envelope)
       conn.on(WebcastEvent.ENVELOPE, (data) => {
-        const envelope = data.envelopeInfo;
-        if (envelope) {
-          this.handleChestDetected(cleanUser, envelope, 'Rương kho báu xu');
-        }
+        this.handleChestDetected(cleanUser, data, 'Rương kho báu xu');
       });
 
       // Lắng nghe sự kiện rương Super Fan
       conn.on(WebcastEvent.SUPER_FAN_BOX, (data) => {
-        const envelope = data.envelopeInfo;
-        if (envelope) {
-          this.handleChestDetected(cleanUser, envelope, 'Rương Super Fan');
-        }
+        this.handleChestDetected(cleanUser, data, 'Rương Super Fan');
       });
 
       // Tự động phát hiện đối thủ qua PK Battle để mở rộng danh sách live
@@ -213,46 +207,125 @@ class TikTokTracker {
   }
 
   // Xử lý khi phát hiện rương
-  handleChestDetected(username, envelope, chestType = 'Rương kho báu xu') {
-    const nowSec = Math.floor(Date.now() / 1000);
-    const envelopeId = envelope.envelopeId || `${username}_${envelope.diamondCount}_${envelope.unpackAt}`;
+  handleChestDetected(username, data, chestType = 'Rương kho báu xu') {
+    if (!data) return;
 
-    // Kiểm tra trùng lặp rương
+    // 1. Bỏ qua nếu là sự kiện ẩn / đóng / hết rương (display === 2: HIDE)
+    if (data.display === 2) {
+      // console.log(`[TikTokTracker] ℹ️ Rương tại @${username} đã kết thúc/ẩn (display: 2).`);
+      return;
+    }
+
+    const envelope = data.envelopeInfo || {};
+
+    // 2. Trích xuất số lượng xu (diamonds/coins)
+    const diamondCount = Number(envelope.diamondCount) ||
+                         Number(envelope.diamond_count) ||
+                         Number(envelope.coins) ||
+                         Number(envelope.voteCount) ||
+                         Number(envelope.superFanCount) ||
+                         Number(data.treasureBoxData?.coins) || 0;
+
+    // 3. Trích xuất số người có thể nhận
+    const peopleCount = Number(envelope.peopleCount) ||
+                        Number(envelope.people_count) ||
+                        Number(envelope.canOpen) ||
+                        Number(data.treasureBoxData?.canOpen) || 0;
+
+    // 4. Bỏ qua nếu số xu và số người đều bằng 0 (thông báo giả/rương đóng)
+    if (diamondCount <= 0 && peopleCount <= 0) {
+      return;
+    }
+
+    // 5. Tính toán thời gian mở rương thật (unpackAt)
+    const nowSec = Math.floor(Date.now() / 1000);
+    const rawUnpackAt = Number(envelope.unpackAt) ||
+                        Number(envelope.unpack_at) ||
+                        Number(envelope.openAt) ||
+                        Number(data.treasureBoxData?.timestamp) || 0;
+
+    let unpackTimestampSec = 0;
+    let remainingSec = 0;
+
+    if (rawUnpackAt > 1000000000000) {
+      // Timestamp dạng mili-giây (13 chữ số)
+      unpackTimestampSec = Math.floor(rawUnpackAt / 1000);
+      remainingSec = Math.max(0, unpackTimestampSec - nowSec);
+    } else if (rawUnpackAt > 100000000) {
+      // Timestamp Unix chuẩn tính bằng giây (10 chữ số)
+      unpackTimestampSec = rawUnpackAt;
+      remainingSec = Math.max(0, unpackTimestampSec - nowSec);
+    } else if (rawUnpackAt > 0) {
+      // Số giây đếm ngược còn lại (ví dụ 180s, 300s)
+      remainingSec = rawUnpackAt;
+      unpackTimestampSec = nowSec + rawUnpackAt;
+    } else {
+      // Không có thời gian đếm ngược
+      remainingSec = 0;
+      unpackTimestampSec = nowSec;
+    }
+
+    // 6. Bỏ qua nếu rương đã mở từ trong quá khứ hơn 10 giây trước
+    if (unpackTimestampSec > 0 && unpackTimestampSec < (nowSec - 10)) {
+      return;
+    }
+
+    // 7. Định dạng thời gian đếm ngược thật
+    let timeFormatted = '';
+    if (remainingSec > 0) {
+      const minutes = Math.floor(remainingSec / 60);
+      const seconds = remainingSec % 60;
+      timeFormatted = `${minutes} phút ${seconds < 10 ? '0' : ''}${seconds} giây`;
+    } else {
+      timeFormatted = '⚡ Có thể mở ngay bây giờ!';
+    }
+
+    const openTimeStr = unpackTimestampSec > 0
+      ? new Date(unpackTimestampSec * 1000).toLocaleTimeString('vi-VN', {
+          timeZone: 'Asia/Ho_Chi_Minh',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        })
+      : 'Mở ngay';
+
+    // 8. Trích xuất tên người tặng
+    let sendUserName = (envelope.sendUserName || envelope.send_user_name || '').trim();
+    if (!sendUserName && data.common?.displayText?.pieces) {
+      for (const p of data.common.displayText.pieces) {
+        if (p.userValue?.user?.nickname || p.userValue?.user?.displayId) {
+          sendUserName = p.userValue.user.nickname || p.userValue.user.displayId;
+          break;
+        }
+      }
+    }
+    if (!sendUserName) {
+      sendUserName = `Chủ phòng (@${username})`;
+    }
+
+    // 9. Kiểm tra chống trùng lặp thông báo rương
+    const envelopeId = envelope.envelopeId || `${username}_${diamondCount}_${unpackTimestampSec}`;
     if (this.seenEnvelopes.has(envelopeId)) {
       return;
     }
     this.seenEnvelopes.set(envelopeId, Date.now());
     storage.incrementChestsFound();
 
-    // Tính thời gian mở rương thật
-    const unpackAt = Number(envelope.unpackAt) || (nowSec + 300);
-    const remainingSec = Math.max(0, unpackAt - nowSec);
-    const minutes = Math.floor(remainingSec / 60);
-    const seconds = remainingSec % 60;
-
-    const timeFormatted = `${minutes} phút ${seconds < 10 ? '0' : ''}${seconds} giây`;
-    const openTimeStr = new Date(unpackAt * 1000).toLocaleTimeString('vi-VN', {
-      timeZone: 'Asia/Ho_Chi_Minh',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-
     const chestData = {
       username,
       roomUrl: `https://www.tiktok.com/@${username}/live`,
       chestType,
       envelopeId,
-      sendUserName: envelope.sendUserName || 'Người dùng ẩn danh',
-      diamondCount: envelope.diamondCount || 0,
-      peopleCount: envelope.peopleCount || 0,
-      unpackAt,
+      sendUserName,
+      diamondCount,
+      peopleCount,
+      unpackAt: unpackTimestampSec,
       remainingSec,
       timeFormatted,
       openTimeStr
     };
 
-    console.log(`[TikTokTracker] 🎁 PHÁT HIỆN RƯƠNG tại @${username} | ${chestData.diamondCount} Xu | ${chestData.peopleCount} người | Đếm ngược: ${timeFormatted}`);
+    console.log(`[TikTokTracker] 🎁 PHÁT HIỆN RƯƠNG HỢP LỆ tại @${username} | ${chestData.diamondCount} Xu | ${chestData.peopleCount} người | Đếm ngược: ${timeFormatted}`);
 
     if (typeof this.onChestCallback === 'function') {
       try {

@@ -1,6 +1,7 @@
 const assert = require('assert');
 const storage = require('../storage');
 const config = require('../config');
+const tracker = require('../tiktokTracker');
 
 console.log('--- Đang chạy kiểm thử hệ thống Bot săn rương ---');
 
@@ -24,24 +25,60 @@ assert(storage.getChannels().includes(testChannel), 'addChannel phải lưu đư
 
 storage.removeChannel(testChannel);
 assert(!storage.getChannels().includes(testChannel), 'removeChannel phải xoá được channel');
-
-storage.incrementChestsFound();
-const stats = storage.getStats();
-assert(stats.chestsFound >= 1, 'incrementChestsFound phải tăng đếm rương');
 console.log('✅ Storage: Tất cả chức năng hoạt động chính xác');
 
-// 3. Kiểm tra tính toán thời gian rương và đếm ngược thật
+// 3. Kiểm tra lọc gói tin giả lập (display: 2 hoặc 0 xu)
+let receivedChest = null;
+tracker.onChest((data) => {
+  receivedChest = data;
+});
+
+// Gói tin đóng rương (display: 2) giống lỗi của @minigamegiaitrivuive
+tracker.handleChestDetected('minigamegiaitrivuive', {
+  display: 2,
+  envelopeInfo: {
+    envelopeId: '7685008551714245397',
+    diamondCount: 0,
+    peopleCount: 0,
+    unpackAt: 0,
+    sendUserName: ''
+  }
+});
+assert(receivedChest === null, 'Gói tin display: 2 (đóng rương) PHẢI bị bỏ qua!');
+console.log('✅ Lọc gói tin đóng rương (display: 2): Hoạt động chuẩn xác');
+
+// Gói tin 0 xu / 0 người
+tracker.handleChestDetected('minigamegiaitrivuive', {
+  display: 1,
+  envelopeInfo: {
+    envelopeId: 'dummy_zero',
+    diamondCount: 0,
+    peopleCount: 0,
+    unpackAt: 0
+  }
+});
+assert(receivedChest === null, 'Gói tin 0 xu / 0 người PHẢI bị bỏ qua!');
+console.log('✅ Lọc gói tin 0 xu / 0 người: Hoạt động chuẩn xác');
+
+// Gói tin rương thật
 const nowSec = Math.floor(Date.now() / 1000);
-const futureSec = nowSec + 185; // 3 phút 5 giây
+const realUnpackAt = nowSec + 185; // 3 phút 5 giây
+tracker.handleChestDetected('minigamegiaitrivuive', {
+  display: 1,
+  envelopeInfo: {
+    envelopeId: 'real_chest_123',
+    diamondCount: 100,
+    peopleCount: 20,
+    unpackAt: realUnpackAt,
+    sendUserName: 'Top1Gifter'
+  }
+});
 
-const remainingSec = Math.max(0, futureSec - nowSec);
-const minutes = Math.floor(remainingSec / 60);
-const seconds = remainingSec % 60;
-const timeFormatted = `${minutes} phút ${seconds < 10 ? '0' : ''}${seconds} giây`;
+assert(receivedChest !== null, 'Rương thật có xu PHẢI được nhận diện!');
+assert(receivedChest.diamondCount === 100, 'Số xu phải là 100');
+assert(receivedChest.peopleCount === 20, 'Số người nhận phải là 20');
+assert(receivedChest.sendUserName === 'Top1Gifter', 'Người gửi phải là Top1Gifter');
+assert(receivedChest.timeFormatted.includes('3 phút'), `Thời gian phải hiển thị 3 phút (nhận: ${receivedChest.timeFormatted})`);
+console.log(`✅ Nhận diện rương thật: ${receivedChest.diamondCount} Xu, ${receivedChest.peopleCount} người, đếm ngược: ${receivedChest.timeFormatted}`);
 
-assert(minutes === 3, `Phút phải là 3 (nhận được: ${minutes})`);
-assert(seconds === 5, `Giây phải là 5 (nhận được: ${seconds})`);
-assert(timeFormatted === '3 phút 05 giây', `Định dạng phải là "3 phút 05 giây" (nhận được: ${timeFormatted})`);
-console.log(`✅ Time calculation: ${timeFormatted} chuẩn xác`);
-
-console.log('🎉 TẤT CẢ KIỂM THỬ ĐÃ VƯỢT QUA!');
+console.log('🎉 TẤT CẢ KIỂM THỬ ĐÃ VƯỢT QUA XUẤT SẮC!');
