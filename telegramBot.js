@@ -140,16 +140,20 @@ Bot hoạt động tự động 24/7, liên tục quét các phòng live TikTok 
 
   async sendStatus(ctx) {
     const stats = storage.getStats();
+    const activeCount = tracker.activeConnections.size;
+    const waitingCount = Math.max(0, stats.channelsCount - activeCount);
+
     const statusMsg = `
 📊 <b>TRẠNG THÁI HỆ THỐNG BOT SĂN RƯƠNG</b>
 ━━━━━━━━━━━━━━━━━━━━
 ⏱️ <b>Thời gian hoạt động:</b> ${stats.uptime}
-🔴 <b>Phòng live đang theo dõi:</b> ${stats.activeConnections}/${config.MAX_CONCURRENT_ROOMS}
+🟢 <b>Phòng đang phát live & theo dõi:</b> ${activeCount}/${config.MAX_CONCURRENT_ROOMS}
+🔄 <b>Kênh chờ live lại (đang quét liên tục):</b> ${waitingCount} kênh
 📋 <b>Tổng kênh trong hệ thống:</b> ${stats.channelsCount} kênh
 🎁 <b>Tổng rương đã phát hiện:</b> ${stats.chestsFound} rương
 👥 <b>Số nhóm/người nhận thông báo:</b> ${stats.subscribersCount}
 ━━━━━━━━━━━━━━━━━━━━
-<i>Hệ thống tự động duy trì kết nối và dò tìm phòng live liên tục!</i>
+<i>💡 Cơ chế tự động: Khi streamer tắt live, bot vẫn giữ kênh trong hàng đợi và liên tục kiểm tra định kỳ 24/7. Ngay khi streamer mở live lại, bot sẽ tự động kết nối và theo dõi rương ngay lập tức!</i>
     `.trim();
 
     await ctx.replyWithHTML(statusMsg);

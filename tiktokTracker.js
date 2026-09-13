@@ -148,19 +148,18 @@ class TikTokTracker {
 
       // Khi kết thúc live
       conn.on(WebcastEvent.STREAM_END, () => {
-        console.log(`[TikTokTracker] 📴 Phiên live của @${cleanUser} đã kết thúc.`);
-        this.cleanupConnection(cleanUser);
+        console.log(`[TikTokTracker] 📴 Kênh @${cleanUser} đã tắt live. Hệ thống vẫn tiếp tục kiểm tra để tự động theo dõi lại ngay khi phát tiếp!`);
+        this.cleanupConnection(cleanUser, true);
       });
 
       // Khi bị mất kết nối
       conn.on('disconnected', () => {
-        this.cleanupConnection(cleanUser);
+        this.cleanupConnection(cleanUser, true);
       });
 
-      // Khi có lỗi
+      // Khi có lỗi kết nối
       conn.on('error', (err) => {
-        // console.error(`[TikTokTracker] Lỗi room @${cleanUser}:`, err.message);
-        this.cleanupConnection(cleanUser);
+        this.cleanupConnection(cleanUser, true);
       });
 
       // Thực hiện kết nối
@@ -169,12 +168,21 @@ class TikTokTracker {
       this.activeConnections.set(cleanUser, conn);
       storage.stats.activeConnections = this.activeConnections.size;
 
-      console.log(`[TikTokTracker] ✅ Đang theo dõi @${cleanUser} (RoomId: ${state.roomId}) | Tổng: ${this.activeConnections.size}/${config.MAX_CONCURRENT_ROOMS}`);
+      console.log(`[TikTokTracker] 🟢 @${cleanUser} ĐANG LIVE (RoomId: ${state.roomId}) | Đang theo dõi rương realtime! | Tổng live: ${this.activeConnections.size}/${config.MAX_CONCURRENT_ROOMS}`);
 
     } catch (err) {
       this.connectingUsers.delete(cleanUser);
-      // Nếu offline, đưa lại vào cuối hàng đợi để kiểm tra sau
-      // console.log(`[TikTokTracker] @${cleanUser} hiện không phát live (${err.message}).`);
+      // Kênh đang offline -> đưa lại vào hàng đợi để kiểm tra vòng lặp liên tục cho đến khi live lại
+      this.requeueChannel(cleanUser);
+    }
+  }
+
+  // Đưa kênh trở lại hàng đợi quét định kỳ
+  requeueChannel(username) {
+    const clean = username.toLowerCase().replace('@', '').trim();
+    if (!clean) return;
+    if (!this.queue.includes(clean) && !this.activeConnections.has(clean) && !this.connectingUsers.has(clean)) {
+      this.queue.push(clean);
     }
   }
 
@@ -193,8 +201,8 @@ class TikTokTracker {
     }
   }
 
-  // Dọn dẹp kết nối khi streamer offline hoặc lỗi
-  cleanupConnection(username) {
+  // Dọn dẹp kết nối khi streamer offline hoặc kết thúc live
+  cleanupConnection(username, shouldRequeue = true) {
     const conn = this.activeConnections.get(username);
     if (conn) {
       try {
@@ -204,6 +212,10 @@ class TikTokTracker {
       storage.stats.activeConnections = this.activeConnections.size;
     }
     this.connectingUsers.delete(username);
+
+    if (shouldRequeue) {
+      this.requeueChannel(username);
+    }
   }
 
   // Xử lý khi phát hiện rương
