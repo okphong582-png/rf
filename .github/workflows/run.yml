@@ -1,0 +1,55 @@
+name: TikTok Live Chest Hunter Bot (5 Hours Loop)
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+  schedule:
+    # Tự động kích hoạt lại mỗi 5 tiếng (0h, 5h, 10h, 15h, 20h UTC)
+    - cron: '0 */5 * * *'
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  run-bot:
+    name: Run Chest Hunter Bot
+    runs-on: ubuntu-latest
+    timeout-minutes: 320 # Cho phép chạy tối đa đến 5 giờ 20 phút
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Run TikTok Chest Hunter Bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN || '8738721874:AAG22QXgkzi8tURDRWJLkmJQUCtdbIxnG2E' }}
+          MAX_CONCURRENT_ROOMS: 15
+          MAX_RUNTIME_MS: 17400000 # 4 giờ 50 phút (~5 tiếng)
+        run: |
+          echo "Bắt đầu chu kỳ chạy bot 5 tiếng..."
+          node index.js
+          echo "Chu kỳ chạy hiện tại đã kết thúc thành công."
+
+      - name: Auto-Retrigger Next 5-Hour Cycle
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Đang kích hoạt chu kỳ 5 tiếng tiếp theo qua GitHub Actions API..."
+          curl -s -X POST \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/workflows/run.yml/dispatches \
+            -d '{"ref":"${{ github.ref_name || 'main' }}"}' || true
+          echo "Đã gửi yêu cầu kích hoạt chu kỳ mới!"
