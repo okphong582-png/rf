@@ -358,16 +358,43 @@ class TikTokTracker {
     }
   }
 
+  // Chuẩn hoá tên người dùng TikTok hoặc đường dẫn live
+  cleanUsername(input) {
+    if (!input || typeof input !== 'string') return '';
+    let str = input.trim();
+    const urlMatch = str.match(/tiktok\.com\/@([a-zA-Z0-9._]+)/i);
+    if (urlMatch) {
+      str = urlMatch[1];
+    }
+    str = str.replace(/^[#/]+/, '').replace(/^@+/, '').replace(/\/.*$/, '').trim().toLowerCase();
+    if (/^[a-zA-Z0-9._]{2,64}$/.test(str)) {
+      return str;
+    }
+    return '';
+  }
+
   // Thêm kênh thủ công
-  addManualChannel(username) {
-    const clean = username.toLowerCase().replace('@', '').trim();
-    if (!clean) return false;
+  addManualChannel(rawInput) {
+    const clean = this.cleanUsername(rawInput);
+    if (!clean) {
+      return { status: 'invalid', username: rawInput };
+    }
+
+    if (storage.hasChannel(clean)) {
+      // Đã có trong danh sách -> vẫn ưu tiên đưa lên đầu hàng đợi quét ngay
+      if (!this.activeConnections.has(clean) && !this.connectingUsers.has(clean)) {
+        this.queue.unshift(clean);
+        this.processQueue();
+      }
+      return { status: 'already_exists', username: clean };
+    }
+
     storage.addChannel(clean);
     if (!this.activeConnections.has(clean) && !this.connectingUsers.has(clean)) {
       this.queue.unshift(clean);
       this.processQueue();
     }
-    return true;
+    return { status: 'added', username: clean };
   }
 }
 

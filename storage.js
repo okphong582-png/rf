@@ -80,6 +80,11 @@ class Storage {
     return Array.from(this.subscribers);
   }
 
+  hasChannel(username) {
+    const clean = username.toLowerCase().replace('@', '').trim();
+    return this.channels.has(clean);
+  }
+
   addChannel(username) {
     const clean = username.toLowerCase().replace('@', '').trim();
     if (clean && !this.channels.has(clean)) {

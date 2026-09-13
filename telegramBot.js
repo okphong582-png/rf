@@ -68,37 +68,141 @@ Chào <b>${chatTitle}</b>!
       await this.sendStatus(ctx);
     });
 
-    // Lệnh /add - Thêm streamer
+    // Lệnh /add - Thêm streamer (hỗ trợ nhiều dòng, nhiều kênh cùng lúc)
     this.bot.command('add', async (ctx) => {
-      const text = ctx.message.text.trim();
-      const parts = text.split(/\s+/);
-      if (parts.length < 2) {
-        return ctx.replyWithHTML('⚠️ Vui lòng nhập tên kênh TikTok cần thêm.\nVí dụ: <code>/add datvilla94</code>');
+      const fullText = ctx.message.text || '';
+      const lines = fullText.split(/\r?\n/);
+      const candidates = [];
+
+      for (const line of lines) {
+        // Loại bỏ tiền tố /add ở đầu mỗi dòng nếu có
+        const cleanedLine = line.replace(/^\/add(?:@\w+)?\s*/i, '').trim();
+        if (!cleanedLine) continue;
+
+        // Tách theo khoảng trắng, dấu phẩy, chấm phẩy
+        const tokens = cleanedLine.split(/[\s,;]+/);
+        for (const token of tokens) {
+          const t = token.trim();
+          if (t) candidates.push(t);
+        }
       }
-      const username = parts[1].replace('@', '').trim();
-      const ok = tracker.addManualChannel(username);
-      if (ok) {
-        await ctx.replyWithHTML(`✅ Đã thêm kênh <b>@${username}</b> vào danh sách theo dõi và ưu tiên kết nối ngay!`);
-      } else {
-        await ctx.replyWithHTML(`⚠️ Kênh không hợp lệ hoặc đã có trong danh sách.`);
+
+      const uniqueCandidates = Array.from(new Set(candidates));
+
+      if (uniqueCandidates.length === 0) {
+        const guideMsg = `
+⚠️ <b>Vui lòng nhập tên kênh hoặc link TikTok cần thêm!</b>
+━━━━━━━━━━━━━━━━━━━━
+💡 <b>Hỗ trợ đa dạng cách nhập:</b>
+• <b>1 kênh:</b> <code>/add datvilla94</code>
+• <b>Nhiều kênh 1 dòng:</b> <code>/add datvilla94 phongbatu phamthoai</code>
+• <b>Nhiều dòng:</b>
+<code>/add
+datvilla94
+phongbatu
+https://www.tiktok.com/@phamthoai/live</code>
+        `.trim();
+        return ctx.replyWithHTML(guideMsg);
       }
+
+      const addedList = [];
+      const alreadyExistList = [];
+      const invalidList = [];
+
+      for (const raw of uniqueCandidates) {
+        const res = tracker.addManualChannel(raw);
+        if (res.status === 'added') {
+          addedList.push(res.username);
+        } else if (res.status === 'already_exists') {
+          alreadyExistList.push(res.username);
+        } else {
+          invalidList.push(raw);
+        }
+      }
+
+      // Nếu chỉ thêm 1 kênh duy nhất
+      if (uniqueCandidates.length === 1) {
+        if (addedList.length === 1) {
+          return ctx.replyWithHTML(`✅ Đã thêm kênh <b>@${addedList[0]}</b> vào danh sách theo dõi và ưu tiên kết nối ngay!`);
+        }
+        if (alreadyExistList.length === 1) {
+          return ctx.replyWithHTML(`⚠️ Kênh <b>@${alreadyExistList[0]}</b> đã có trong danh sách theo dõi từ trước rồi! (Bot vẫn đang duy trì quét kênh này).`);
+        }
+        return ctx.replyWithHTML(`❌ Tên kênh <code>${invalidList[0]}</code> không hợp lệ.`);
+      }
+
+      // Nếu thêm nhiều kênh / nhiều dòng
+      let replyMsg = `📋 <b>KẾT QUẢ THÊM KÊNH (${uniqueCandidates.length} kênh)</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+
+      if (addedList.length > 0) {
+        replyMsg += `✅ <b>Đã thêm mới thành công (${addedList.length}):</b>\n`;
+        replyMsg += addedList.map(u => `• <code>@${u}</code>`).join('\n') + '\n\n';
+      }
+
+      if (alreadyExistList.length > 0) {
+        replyMsg += `⚠️ <b>Đã có trong danh sách từ trước (${alreadyExistList.length}):</b>\n`;
+        replyMsg += alreadyExistList.map(u => `• <code>@${u}</code>`).join('\n') + '\n\n';
+      }
+
+      if (invalidList.length > 0) {
+        replyMsg += `❌ <b>Không hợp lệ (${invalidList.length}):</b>\n`;
+        replyMsg += invalidList.map(u => `• <code>${u}</code>`).join('\n') + '\n\n';
+      }
+
+      replyMsg += `━━━━━━━━━━━━━━━━━━━━\n<i>Các kênh đã được đưa vào hàng đợi ưu tiên kiểm tra live ngay!</i>`;
+      await ctx.replyWithHTML(replyMsg);
     });
 
-    // Lệnh /remove - Xoá streamer
+    // Lệnh /remove - Xoá streamer (hỗ trợ nhiều dòng, nhiều kênh cùng lúc)
     this.bot.command('remove', async (ctx) => {
-      const text = ctx.message.text.trim();
-      const parts = text.split(/\s+/);
-      if (parts.length < 2) {
+      const fullText = ctx.message.text || '';
+      const lines = fullText.split(/\r?\n/);
+      const candidates = [];
+
+      for (const line of lines) {
+        const cleanedLine = line.replace(/^\/remove(?:@\w+)?\s*/i, '').trim();
+        if (!cleanedLine) continue;
+        const tokens = cleanedLine.split(/[\s,;]+/);
+        for (const token of tokens) {
+          const t = token.trim();
+          if (t) candidates.push(t);
+        }
+      }
+
+      const uniqueCandidates = Array.from(new Set(candidates));
+
+      if (uniqueCandidates.length === 0) {
         return ctx.replyWithHTML('⚠️ Vui lòng nhập tên kênh cần xoá.\nVí dụ: <code>/remove datvilla94</code>');
       }
-      const username = parts[1].replace('@', '').trim();
-      const removed = storage.removeChannel(username);
-      if (removed) {
-        tracker.cleanupConnection(username);
-        await ctx.replyWithHTML(`🗑️ Đã xoá kênh <b>@${username}</b> khỏi danh sách.`);
-      } else {
-        await ctx.replyWithHTML(`⚠️ Kênh <b>@${username}</b> không có trong danh sách.`);
+
+      const removedList = [];
+      const notFoundList = [];
+
+      for (const raw of uniqueCandidates) {
+        const clean = tracker.cleanUsername(raw);
+        if (clean && storage.removeChannel(clean)) {
+          tracker.cleanupConnection(clean, false);
+          removedList.push(clean);
+        } else {
+          notFoundList.push(clean || raw);
+        }
       }
+
+      if (uniqueCandidates.length === 1) {
+        if (removedList.length === 1) {
+          return ctx.replyWithHTML(`🗑️ Đã xoá kênh <b>@${removedList[0]}</b> khỏi danh sách.`);
+        }
+        return ctx.replyWithHTML(`⚠️ Kênh <b>@${notFoundList[0]}</b> không có trong danh sách.`);
+      }
+
+      let replyMsg = `🗑️ <b>KẾT QUẢ XOÁ KÊNH:</b>\n━━━━━━━━━━━━━━━━━━━━\n`;
+      if (removedList.length > 0) {
+        replyMsg += `✅ <b>Đã xoá (${removedList.length}):</b>\n` + removedList.map(u => `• <code>@${u}</code>`).join('\n') + '\n\n';
+      }
+      if (notFoundList.length > 0) {
+        replyMsg += `⚠️ <b>Không tìm thấy (${notFoundList.length}):</b>\n` + notFoundList.map(u => `• <code>${u}</code>`).join('\n') + '\n\n';
+      }
+      await ctx.replyWithHTML(replyMsg);
     });
 
     // Lệnh /list - Xem danh sách kênh

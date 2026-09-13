@@ -22,10 +22,23 @@ assert(!storage.getSubscribers().includes(testChatId), 'removeSubscriber phải 
 const testChannel = 'test_streamer_live';
 storage.addChannel(testChannel);
 assert(storage.getChannels().includes(testChannel), 'addChannel phải lưu được channel');
+assert(storage.hasChannel(testChannel), 'hasChannel phải trả về true');
+
+// Kiểm tra làm sạch username từ link hoặc @
+assert(tracker.cleanUsername('@datvilla94') === 'datvilla94', 'cleanUsername phải bỏ @');
+assert(tracker.cleanUsername('https://www.tiktok.com/@phamthoai/live') === 'phamthoai', 'cleanUsername phải trích xuất username từ link live');
+
+// Kiểm tra thêm kênh mới vs kênh đã tồn tại
+const resNew = tracker.addManualChannel('unique_streamer_abc');
+assert(resNew.status === 'added', 'Kênh mới thêm phải có status là added');
+
+const resExist = tracker.addManualChannel('unique_streamer_abc');
+assert(resExist.status === 'already_exists', 'Kênh đã có sẵn phải có status là already_exists');
 
 storage.removeChannel(testChannel);
+storage.removeChannel('unique_streamer_abc');
 assert(!storage.getChannels().includes(testChannel), 'removeChannel phải xoá được channel');
-console.log('✅ Storage: Tất cả chức năng hoạt động chính xác');
+console.log('✅ Storage & Channel cleaning: Tất cả chức năng hoạt động chính xác');
 
 // 3. Kiểm tra lọc gói tin giả lập (display: 2 hoặc 0 xu)
 let receivedChest = null;
