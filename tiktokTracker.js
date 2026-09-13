@@ -61,12 +61,10 @@ class TikTokTracker {
     storage.stats.activeConnections = 0;
   }
 
-  // Làm mới hàng đợi từ storage
+  // Làm mới hàng đợi từ storage (giữ nguyên thứ tự ưu tiên các kênh đầu như minigamegiaitrivuive)
   refreshQueue() {
     const allChannels = storage.getChannels();
-    // Trộn ngẫu nhiên để quét đa dạng
-    const shuffled = [...allChannels].sort(() => 0.5 - Math.random());
-    for (const ch of shuffled) {
+    for (const ch of allChannels) {
       if (!this.queue.includes(ch) && !this.activeConnections.has(ch) && !this.connectingUsers.has(ch)) {
         this.queue.push(ch);
       }
@@ -130,6 +128,13 @@ class TikTokTracker {
         this.handleChestDetected(cleanUser, data, 'Rương Super Fan');
       });
 
+      // Bắt thêm decodedData để không bỏ sót bất kỳ gói tin Envelope nào
+      conn.on('decodedData', (method, decodedData) => {
+        if (method === 'WebcastEnvelopeMessage' && decodedData?.data) {
+          this.handleChestDetected(cleanUser, decodedData.data, 'Rương kho báu xu');
+        }
+      });
+
       // Tự động phát hiện đối thủ qua PK Battle để mở rộng danh sách live
       conn.on(WebcastEvent.LINK_MIC_BATTLE, (data) => {
         try {
@@ -182,7 +187,12 @@ class TikTokTracker {
     const clean = username.toLowerCase().replace('@', '').trim();
     if (!clean) return;
     if (!this.queue.includes(clean) && !this.activeConnections.has(clean) && !this.connectingUsers.has(clean)) {
-      this.queue.push(clean);
+      // Ưu tiên kênh minigame đưa lên đầu hàng đợi để kết nối lại ngay lập tức
+      if (clean === 'minigamegiaitrivuive') {
+        this.queue.unshift(clean);
+      } else {
+        this.queue.push(clean);
+      }
     }
   }
 
@@ -222,9 +232,9 @@ class TikTokTracker {
   handleChestDetected(username, data, chestType = 'Rương kho báu xu') {
     if (!data) return;
 
-    // 1. Bỏ qua nếu là sự kiện ẩn / đóng / hết rương (display === 2: HIDE)
+    // 1. Gói tin ẩn/đóng rương khi hết hạn hoặc đã mở: display === 2 (HIDE)
+    // Chỉ bỏ qua khi display === 2
     if (data.display === 2) {
-      // console.log(`[TikTokTracker] ℹ️ Rương tại @${username} đã kết thúc/ẩn (display: 2).`);
       return;
     }
 
@@ -244,10 +254,15 @@ class TikTokTracker {
                         Number(envelope.canOpen) ||
                         Number(data.treasureBoxData?.canOpen) || 0;
 
-    // 4. Bỏ qua nếu số xu và số người đều bằng 0 (thông báo giả/rương đóng)
-    if (diamondCount <= 0 && peopleCount <= 0) {
-      return;
-    }
+    // 4. Định dạng hiển thị số xu và số người nhận thân thiện:
+    // Tuyệt đối KHÔNG bỏ qua rương nếu diamondCount === 0 vì TikTok thường giấu số xu với rương may mắn bí mật!
+    const diamondText = diamondCount > 0
+      ? `${diamondCount.toLocaleString('vi-VN')} Xu (Diamonds)`
+      : 'Rương may mắn / Xu ngẫu nhiên (Bí mật)';
+
+    const peopleText = peopleCount > 0
+      ? `${peopleCount.toLocaleString('vi-VN')} người`
+      : 'Nhiều người nhận (Mở nhanh kẻo hết)';
 
     // 5. Tính toán thời gian mở rương thật (unpackAt)
     const nowSec = Math.floor(Date.now() / 1000);
@@ -272,13 +287,13 @@ class TikTokTracker {
       remainingSec = rawUnpackAt;
       unpackTimestampSec = nowSec + rawUnpackAt;
     } else {
-      // Không có thời gian đếm ngược
-      remainingSec = 0;
-      unpackTimestampSec = nowSec;
+      // Nếu không có thời gian đếm ngược chính xác, mặc định rương TikTok là khoảng 3 - 5 phút
+      remainingSec = 300;
+      unpackTimestampSec = nowSec + 300;
     }
 
-    // 6. Bỏ qua nếu rương đã mở từ trong quá khứ hơn 10 giây trước
-    if (unpackTimestampSec > 0 && unpackTimestampSec < (nowSec - 10)) {
+    // 6. Bỏ qua nếu rương đã hết hạn từ quá khứ (hơn 15 giây trước)
+    if (rawUnpackAt > 0 && unpackTimestampSec > 0 && unpackTimestampSec < (nowSec - 15)) {
       return;
     }
 
@@ -316,7 +331,7 @@ class TikTokTracker {
     }
 
     // 9. Kiểm tra chống trùng lặp thông báo rương
-    const envelopeId = envelope.envelopeId || `${username}_${diamondCount}_${unpackTimestampSec}`;
+    const envelopeId = envelope.envelopeId || `${username}_${unpackTimestampSec}`;
     if (this.seenEnvelopes.has(envelopeId)) {
       return;
     }
@@ -331,13 +346,15 @@ class TikTokTracker {
       sendUserName,
       diamondCount,
       peopleCount,
+      diamondText,
+      peopleText,
       unpackAt: unpackTimestampSec,
       remainingSec,
       timeFormatted,
       openTimeStr
     };
 
-    console.log(`[TikTokTracker] 🎁 PHÁT HIỆN RƯƠNG HỢP LỆ tại @${username} | ${chestData.diamondCount} Xu | ${chestData.peopleCount} người | Đếm ngược: ${timeFormatted}`);
+    console.log(`[TikTokTracker] 🎁 PHÁT HIỆN RƯƠNG HỢP LỆ tại @${username} | ${diamondText} | ${peopleText} | Đếm ngược: ${timeFormatted}`);
 
     if (typeof this.onChestCallback === 'function') {
       try {

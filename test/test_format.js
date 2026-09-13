@@ -46,7 +46,7 @@ tracker.onChest((data) => {
   receivedChest = data;
 });
 
-// Gói tin đóng rương (display: 2) giống lỗi của @minigamegiaitrivuive
+// Gói tin đóng rương (display: 2) khi rương mở xong hoặc hết hạn (PHẢI BỎ QUA)
 tracker.handleChestDetected('minigamegiaitrivuive', {
   display: 2,
   envelopeInfo: {
@@ -60,20 +60,23 @@ tracker.handleChestDetected('minigamegiaitrivuive', {
 assert(receivedChest === null, 'Gói tin display: 2 (đóng rương) PHẢI bị bỏ qua!');
 console.log('✅ Lọc gói tin đóng rương (display: 2): Hoạt động chuẩn xác');
 
-// Gói tin 0 xu / 0 người
+// Gói tin rương may mắn ẩn xu (display: 1, diamondCount: 0) -> KHÔNG ĐƯỢC BỎ SÓT!
 tracker.handleChestDetected('minigamegiaitrivuive', {
   display: 1,
   envelopeInfo: {
-    envelopeId: 'dummy_zero',
+    envelopeId: 'lucky_chest_zero_coins',
     diamondCount: 0,
-    peopleCount: 0,
-    unpackAt: 0
+    peopleCount: 1,
+    unpackAt: Math.floor(Date.now() / 1000) + 300
   }
 });
-assert(receivedChest === null, 'Gói tin 0 xu / 0 người PHẢI bị bỏ qua!');
-console.log('✅ Lọc gói tin 0 xu / 0 người: Hoạt động chuẩn xác');
+assert(receivedChest !== null, 'Rương may mắn (ẩn xu) KHÔNG ĐƯỢC BỎ QUA!');
+assert(receivedChest.diamondText.includes('Bí mật'), 'Phải gắn nhãn rương bí mật / may mắn');
+console.log('✅ Nhận diện rương may mắn ẩn xu: Hoạt động chuẩn xác');
 
-// Gói tin rương thật
+receivedChest = null;
+
+// Gói tin rương thật có xu
 const nowSec = Math.floor(Date.now() / 1000);
 const realUnpackAt = nowSec + 185; // 3 phút 5 giây
 tracker.handleChestDetected('minigamegiaitrivuive', {

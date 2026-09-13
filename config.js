@@ -5,7 +5,7 @@ module.exports = {
   BOT_TOKEN: process.env.BOT_TOKEN || '8738721874:AAG22QXgkzi8tURDRWJLkmJQUCtdbIxnG2E',
 
   // Số lượng phòng live theo dõi đồng thời tối đa
-  MAX_CONCURRENT_ROOMS: parseInt(process.env.MAX_CONCURRENT_ROOMS, 10) || 15,
+  MAX_CONCURRENT_ROOMS: parseInt(process.env.MAX_CONCURRENT_ROOMS, 10) || 30,
 
   // Thời gian tối đa chạy một phiên trước khi tự khởi động lại (4 giờ 50 phút = 17400000 ms)
   MAX_RUNTIME_MS: parseInt(process.env.MAX_RUNTIME_MS, 10) || (4 * 60 + 50) * 60 * 1000,
@@ -14,11 +14,14 @@ module.exports = {
   QUEUE_CHECK_INTERVAL_SEC: 10,
 
   // Thời gian lưu cache rương để tránh gửi trùng lặp (phút)
-  CHEST_CACHE_TTL_MINUTES: 15,
+  CHEST_CACHE_TTL_MINUTES: 10,
 
-  // Danh sách các kênh TikTok Live mẫu (kênh thường xuyên phát live, PK, nạp xu tặng rương)
+  // Danh sách các kênh TikTok Live ưu tiên theo dõi rương
   SEED_CREATORS: [
-    // Top streamer / PK Việt Nam
+    // Top 1 kênh minigame thả rương
+    'minigamegiaitrivuive',
+
+    // Các kênh TikTok Live PK, rương xu Việt Nam
     'datvilla94',
     'phongbatu',
     'phamthoai',
@@ -39,27 +42,11 @@ module.exports = {
     'minhhang_stream',
     'haiyen.live',
     'ducphat_pk',
-
-    // Top live quốc tế / gaming / PK Châu Á
-    'charlidamelio',
-    'bellapoarch',
-    'khaby.lame',
-    'addisonre',
-    'mrbeast',
-    'zachking',
-    'dixiedamelio',
-    'spencerx',
-    'lorengray',
-    'justmaiko',
-    'brentrivera',
-    'avani',
-    'riyaz.14',
-    'camerondallas',
-    'jiffpom',
-    'dobretwins',
-    'jamescharles',
-    'lilhuddy',
-    'stokestwins',
-    'gilmhercroes'
+    'ruongxulive',
+    'nhanxutiktok',
+    'sankhobau',
+    'sanxutiktok',
+    'hopquaxu',
+    'pk_vietnam'
   ]
 };

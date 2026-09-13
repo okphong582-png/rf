@@ -33,18 +33,48 @@ jobs:
           node-version: 22
           cache: 'npm'
 
+      - name: Restore subscribers & channels cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            subscribers.json
+            channels.json
+          key: bot-data-cache-${{ github.run_id }}
+          restore-keys: |
+            bot-data-cache-
+
       - name: Install Dependencies
         run: npm ci || npm install
 
       - name: Run TikTok Chest Hunter Bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN || '8738721874:AAG22QXgkzi8tURDRWJLkmJQUCtdbIxnG2E' }}
-          MAX_CONCURRENT_ROOMS: 15
+          MAX_CONCURRENT_ROOMS: 30
           MAX_RUNTIME_MS: 17400000 # 4 giờ 50 phút (~5 tiếng)
         run: |
           echo "Bắt đầu chu kỳ chạy bot 5 tiếng..."
           node index.js
           echo "Chu kỳ chạy hiện tại đã kết thúc thành công."
+
+      - name: Save subscribers & channels cache
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            subscribers.json
+            channels.json
+          key: bot-data-cache-${{ github.run_id }}
+
+      - name: Commit & Push updated subscribers and channels
+        if: always()
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add subscribers.json channels.json
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: persist subscribers and channels [skip ci]"
+            git push origin HEAD:${{ github.ref_name || 'main' }} || true
+          fi
 
       - name: Auto-Retrigger Next 5-Hour Cycle
         if: success()

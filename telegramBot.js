@@ -10,6 +10,14 @@ class TelegramBotManager {
   }
 
   setupHandlers() {
+    // Tự động đăng ký nhận tin cho bất kỳ chat/nhóm nào tương tác với bot
+    this.bot.use(async (ctx, next) => {
+      if (ctx.chat && ctx.chat.id) {
+        storage.addSubscriber(ctx.chat.id);
+      }
+      return next();
+    });
+
     // Lệnh /start - Kích hoạt theo dõi và nhận thông báo
     this.bot.command('start', async (ctx) => {
       const chatId = ctx.chat.id;
@@ -293,14 +301,17 @@ Bot hoạt động tự động 24/7, liên tục quét các phòng live TikTok 
       return;
     }
 
+    const diamondDisplay = chestData.diamondText || (chestData.diamondCount > 0 ? `${chestData.diamondCount.toLocaleString('vi-VN')} Xu (Diamonds)` : 'Rương may mắn / Xu ngẫu nhiên (Bí mật)');
+    const peopleDisplay = chestData.peopleText || (chestData.peopleCount > 0 ? `${chestData.peopleCount.toLocaleString('vi-VN')} người` : 'Nhiều người nhận (Mở nhanh kẻo hết)');
+
     const messageHtml = `
 🎁 <b>PHÁT HIỆN ${chestData.chestType.toUpperCase()}!</b> 🎁
 ━━━━━━━━━━━━━━━━━━━━
 👤 <b>Kênh Live:</b> <code>@${chestData.username}</code>
 🔗 <b>Link phòng live:</b> <a href="${chestData.roomUrl}">${chestData.roomUrl}</a>
 
-💰 <b>Số lượng xu:</b> <b>${chestData.diamondCount.toLocaleString('vi-VN')} Xu (Diamonds)</b> 🪙
-👥 <b>Số người nhận:</b> <b>${chestData.peopleCount} người</b>
+💰 <b>Số lượng xu:</b> <b>${diamondDisplay}</b> 🪙
+👥 <b>Số người nhận:</b> <b>${peopleDisplay}</b>
 ⏳ <b>Thời gian còn lại:</b> <b>${chestData.timeFormatted}</b>
 ⏰ <b>Thời điểm mở:</b> <b>${chestData.openTimeStr}</b> (Giờ VN)
 🎁 <b>Người gửi rương:</b> ${chestData.sendUserName}
